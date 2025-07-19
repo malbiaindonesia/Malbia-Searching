@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Malbia Search</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: #f4f4f4;
+      color: #222;
+    }
+
+    header {
+      background: #0b5e3d;
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 2em;
+    }
+
+    .search-box {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      padding: 20px;
+      flex-wrap: wrap;
+    }
+
+    .search-box input, .search-box select, .search-box button {
+      padding: 12px;
+      font-size: 16px;
+      border-radius: 30px;
+      border: 1px solid #ccc;
+    }
+
+    .search-box input {
+      width: 70%;
+      max-width: 500px;
+    }
+
+    .results {
+      max-width: 900px;
+      margin: 20px auto;
+      padding: 0 20px;
+    }
+
+    .result-item {
+      display: flex;
+      background: white;
+      margin-bottom: 15px;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .result-item img {
+      width: 140px;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .result-text {
+      padding: 15px;
+      flex-grow: 1;
+    }
+
+    .result-text h3 {
+      margin: 0 0 5px;
+      font-size: 18px;
+      color: #0b5e3d;
+    }
+
+    .result-text a {
+      text-decoration: none;
+      color: #0b5e3d;
+    }
+
+    .result-text p {
+      margin: 0;
+      font-size: 14px;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Malbia.id</h1>
+    <p>Cari informasi, gambar, dan referensi terpercaya</p>
+  </header>
+
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="Cari sesuatu..." />
+    <select id="searchType">
+      <option value="all">Semua</option>
+      <option value="image">Gambar</option>
+    </select>
+    <button onclick="handleSearch()">Cari</button>
+  </div>
+
+  <div class="results" id="wikiSummary"></div>
+  <div class="results" id="results"></div>
+
+  <script>
+    const apiKey = "AIzaSyBJ3LMOCG52Xg0VWYo2STpVvX0TiGp4nPk";
+    const cx = "80a34ce1032d34e76";
+
+    function handleSearch() {
+      const query = document.getElementById("searchInput").value.trim();
+      const type = document.getElementById("searchType").value;
+      if (query) {
+        localStorage.setItem("lastQuery", query);
+        localStorage.setItem("lastType", type);
+        fetchWikipediaSummary(query);
+        searchGoogle(query, type);
+      }
+    }
+
+    function fetchWikipediaSummary(query) {
+      const summaryUrl = `https://id.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`;
+      document.getElementById("wikiSummary").innerHTML = "";
+
+      fetch(summaryUrl)
+        .then(res => res.json())
+        .then(data => {
+          if (data.extract) {
+            const title = data.title;
+            const extract = data.extract;
+            const link = data.content_urls?.desktop?.page || `https://id.wikipedia.org/wiki/${encodeURIComponent(query)}`;
+            const thumbnail = data.thumbnail?.source;
+
+            const html = `
+              <div class="result-item">
+                ${thumbnail ? `<img src="${thumbnail}" alt="${title}" />` : ""}
+                <div class="result-text">
+                  <h3><a href="${link}" target="_blank" rel="noopener">${title} (Wikipedia)</a></h3>
+                  <p>${extract}</p>
+                </div>
+              </div>
+            `;
+            document.getElementById("wikiSummary").innerHTML = html;
+          }
+        })
+        .catch(() => {
+          document.getElementById("wikiSummary").innerHTML = "";
+        });
+    }
+
+    function searchGoogle(query, type) {
+      document.getElementById("results").innerHTML = "<p>Memuat hasil pencarian...</p>";
+
+      let url = `https://www.googleapis.com/customsearch/v1?q=${encodeURIComponent(query)}&cx=${cx}&key=${apiKey}`;
+      if (type === "image") {
+        url += "&searchType=image";
+      }
+
+      fetch(url)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.items || data.items.length === 0) {
+            document.getElementById("results").innerHTML = "<p>Tidak ditemukan hasil.</p>";
+            return;
+          }
+
+          const results = data.items.map(item => {
+            const title = item.title;
+            const link = item.link;
+            const snippet = item.snippet;
+            const thumbnail = item.pagemap?.cse_thumbnail?.[0]?.src;
+
+            return `
+              <div class="result-item">
+                ${thumbnail ? `<img src="${thumbnail}" alt="${title}" />` : ""}
+                <div class="result-text">
+                  <h3><a href="${link}" target="_blank" rel="noopener">${title}</a></h3>
+                  <p>${snippet}</p>
+                </div>
+              </div>
+            `;
+          }).join("");
+
+          document.getElementById("results").innerHTML = results;
+        })
+        .catch(error => {
+          console.error("Error:", error);
+          document.getElementById("results").innerHTML = "<p>Terjadi kesalahan.</p>";
+        });
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+      const input = document.getElementById("searchInput");
+      input.addEventListener("keyup", function (event) {
+        if (event.key === "Enter") {
+          handleSearch();
+        }
+      });
+
+      const lastQuery = localStorage.getItem("lastQuery");
+      const lastType = localStorage.getItem("lastType") || "all";
+      if (lastQuery) {
+        input.value = lastQuery;
+        document.getElementById("searchType").value = lastType;
+        fetchWikipediaSummary(lastQuery);
+        searchGoogle(lastQuery, lastType);
+      }
+    });
+  </script>
+</body>
+</html>
